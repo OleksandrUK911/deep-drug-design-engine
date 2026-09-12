@@ -18,6 +18,11 @@ mlruns/
 mlruns.db
 mlartifacts/
 mlruns_checkpoints/
+bin/
+data/docking_cache/
+data/fixtures/docking/split/
+data/fixtures/docking/test_split/
+data/fixtures/docking/dock_run*/
 .pytest_cache/
 .coverage
 
