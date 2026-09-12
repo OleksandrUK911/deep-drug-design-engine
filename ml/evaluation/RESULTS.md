@@ -214,6 +214,36 @@ same 60-step/batch-64 budget as the docking-free run is future work
 (would need either a much cheaper/approximate docking proxy per RL step,
 or a larger time budget than fits in an interactive session).
 
+## Multi-objective (Pareto) analysis vs. single scalarized reward
+
+300 samples drawn from the Sprint-6 RL agent, objectives = property
+(trained GIN) + SAScore-synthesizability + nearest-neighbor novelty
+(1 - max Tanimoto similarity to a 2000-molecule ZINC reference set):
+
+| | Value |
+|---|---|
+| Valid unique candidates | 77 / 300 |
+| Pareto front size (non-dominated) | 23 / 77 |
+| Scalarization-reachable set (10-step weight grid) | 10 / 77 |
+| **Pareto-optimal candidates unreachable by any fixed weight vector** | **13** |
+
+**This is the concrete answer to "does Pareto give candidates no fixed
+weight vector could ever select": yes — 13 of 23 Pareto-optimal
+candidates (57%) sit on non-convex regions of the front and are
+mathematically unreachable by `ml/rl/reward.py`'s single-scalarized
+reward, no matter how the weights are tuned.** Example unreachable
+candidate: `CCc1cc([N+](=O)[O-])cc([N-]CCCN(C(=O)C(C)C)[NH2+]CC(C)(C)O)c1`
+(property=0.878, synth=0.629, **novelty=0.769**) — high novelty and
+property but merely middling synthesizability, a trade-off point the
+weighted-sum approach systematically overlooks in favor of
+uniformly-good-on-average candidates like the best single-reward pick,
+`CCOc1cccc(NC(=O)C(=O)Nc2cccc(Br)c2)c1` (property=0.922, synth=0.915,
+novelty=0.48).
+
+Three Pareto "knee" points (balanced trade-offs, picked by distance to
+the ideal point) are reported by `ml/training/analyze_pareto.py` for use
+as a representative shortlist instead of either extreme.
+
 ## Reproduce
 
 ```bash
