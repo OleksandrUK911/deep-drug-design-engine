@@ -171,6 +171,49 @@ threshold, and under even the strict 1.0 Å bar. Batch docking of the
   `data/TODO_protein_target_data.md`, which still need their own
   validation once selected.
 
+## RL optimization: REINVENT fine-tuning of the char-RNN generator
+
+Reward = 0.45 x BBBP-property (trained GIN) + 0.25 x QED + 0.30 x SAScore
+(normalized), 60 REINVENT steps, batch size 64, sigma=60, lr=1e-4,
+starting from the pretrained char-RNN checkpoint (Sprint 4):
+
+| | Before RL | After RL | Delta |
+|---|---|---|---|
+| Mean reward | 0.310 | 0.756 | **+0.447** |
+| Validity | 0.40 | 0.89 | +0.49 |
+| Internal diversity | 0.876 | 0.782 | -0.094 |
+| Unique fraction per batch | - | 0.97-1.00 throughout training | no collapse |
+
+**Reading:** a substantial, real reward improvement with a real but small
+diversity cost — exactly the trade-off REINVENT's prior-anchored loss is
+designed to make graceful rather than catastrophic (contrast with the
+Graph VAE's diversity collapsing to 0.0 in Sprint 4). Top post-RL
+molecules by reward are chemically sensible and non-repetitive drug-like
+aromatic amides/ethers (e.g. `Cc1cccc(C)c1OCC(=O)NCC(F)(F)F`,
+`COc1ccccc1C(=O)NCc1ccccc1Cl`), not degenerate reward-hacking artifacts.
+Reward distribution before/after is saved as
+`mlruns_checkpoints/reward_distribution.png` (MLflow artifact).
+
+### Proof-of-concept run with docking included (`--with-docking`)
+
+Docking every molecule in every RL batch is too slow for the main
+60-step run above (~1s/molecule x 64/batch x 60 steps ≈ 1 hour+); this
+smaller run (5 steps, batch size 8, weights 0.35 property / 0.15 QED /
+0.20 synth / 0.30 docking against the 3PTB trypsin pocket) exists purely
+to validate that the full composite reward — including the expensive
+Vina term — works mechanically end-to-end:
+
+| | Before RL | After RL |
+|---|---|---|
+| Mean reward | 0.172 | 0.436 |
+| Validity | 0.25 | 0.60 |
+| Internal diversity | 0.909 | 0.870 |
+
+Real improvement on a tiny budget, diversity held. Scaling this to the
+same 60-step/batch-64 budget as the docking-free run is future work
+(would need either a much cheaper/approximate docking proxy per RL step,
+or a larger time budget than fits in an interactive session).
+
 ## Reproduce
 
 ```bash
@@ -182,4 +225,7 @@ python -m ml.training.train_property_model --dataset data/raw/BBBP.csv \
 
 python -m ml.training.train_property_model --dataset data/raw/BBBP.csv \
     --smiles-col smiles --label-col p_np --task classification --architecture gin
+
+python -m ml.training.train_rl --smiles-checkpoint mlruns_checkpoints/smiles_rnn.pt \
+    --property-checkpoint mlruns_checkpoints/gin_BBBP.pt --n-steps 60 --batch-size 64
 ```
