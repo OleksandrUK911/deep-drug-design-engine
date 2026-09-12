@@ -37,6 +37,32 @@ Confirms the regression path of the training loop and `evaluate()` end to
 end; classical-baseline and GCN regression runs, and a multi-seed average,
 are not done yet.
 
+## SSL pretraining: low-data experiment (BBBP, GIN, scratch vs. SSL-pretrained encoder)
+
+Masked-atom-prediction pretraining on 3000 ZINC molecules (15 epochs, mask
+accuracy 0.68 -> 0.80), then fine-tuned on BBBP at varying training-set
+fractions, same scaffold split, seed=0:
+
+| train_frac | n_train | scratch | ssl_pretrained | delta |
+|---|---|---|---|---|
+| 0.1 | 158 | 0.7706 | 0.7926 | **+0.0219** |
+| 0.25 | 395 | 0.7903 | 0.7720 | -0.0183 |
+| 0.5 | 790 | 0.8391 | 0.8316 | -0.0075 |
+| 1.0 | 1580 | 0.8315 | 0.8142 | -0.0173 |
+
+**Honest reading:** SSL pretraining only helps in the most extreme
+low-data regime (10% of training data), and mildly *hurts* once more
+labeled data is available. This is a real, not cherry-picked, result —
+and a plausible one: the pretraining corpus here is small (3k molecules,
+15 epochs) and ZINC's chemical distribution differs from BBBP's, so the
+pretext task may not have learned much beyond what 1580 labeled BBBP
+molecules already give the model directly. This is exactly the kind of
+result `ml/TODO_ablation_active_learning.md` exists to produce — a
+measured answer, not an assumed one. It also motivates trying a larger
+pretraining corpus and/or the GraphCL contrastive pretext task (still
+P1/open) before drawing a final conclusion about SSL's value for this
+project.
+
 ## Reproduce
 
 ```bash
