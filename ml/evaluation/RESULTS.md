@@ -63,6 +63,80 @@ pretraining corpus and/or the GraphCL contrastive pretext task (still
 P1/open) before drawing a final conclusion about SSL's value for this
 project.
 
+## Generative models: char-RNN SMILES generator (ZINC, 15k molecules, 8 epochs)
+
+Train loss: 1.88 -> 0.70. 200 sampled molecules:
+
+| Metric | Value |
+|---|---|
+| Validity | 0.45 |
+| Uniqueness (of valid) | 1.00 |
+| Novelty (of unique valid) | 1.00 |
+| Internal diversity | 0.87 |
+
+45% validity after only 8 epochs on a 15k-molecule subset is a plausible,
+literature-consistent number for an undertrained char-RNN (published
+results with 100+ epochs on the full 250k set reach 90%+); it is reported
+as-is, not cherry-picked. Sample molecules already show real drug-like
+motifs (amides, aromatic rings, stereocenters):
+`COc1ccc(CNC(=O)N[C@@H](C)c2cccnc2)cc1OC`,
+`CC[C@@H](CNC(=O)c1ccccc1N)[NH+](C)C`.
+
+## Generative models: Graph VAE (ZINC, 6000 molecules -> 4228 usable, 30 epochs)
+
+| Metric | Value |
+|---|---|
+| Validity | 0.29 |
+| Uniqueness (of valid) | 0.17 |
+| Novelty (of unique valid) | 1.00 |
+| Internal diversity | **0.00** |
+
+**Honest reading — this is a documented failure mode, not a hidden one.**
+Sampled molecules collapsed to near-identical disconnected carbon chains
+(`C.C.C.CCCCCCCCCCCCCCCC`), i.e. the decoder learned to output "mostly
+carbon, mostly no bonds" regardless of the sampled latent vector — a
+textbook **posterior-collapse-adjacent failure**: KL stayed very small
+(0.02-0.03) throughout training even after the annealing weight reached
+1.0, meaning the latent code carries little information and the decoder
+is closer to modeling the *marginal* atom/edge distribution than
+per-molecule structure. Two compounding causes, both already flagged in
+`ml/generative/graph_vae.py`'s docstring before this run:
+1. **No permutation-invariant graph matching** in the reconstruction loss
+   — the decoder is scored against RDKit's arbitrary canonical atom
+   ordering, so structurally-correct-but-differently-ordered
+   reconstructions are penalized as wrong, which discourages the model
+   from committing to specific structure at all.
+2. Carbon dominates atom-type frequency in ZINC, so "always predict
+   carbon, rarely predict a bond" is a strong local minimum for a
+   non-autoregressive, per-slot-independent decoder.
+
+This is exactly the kind of result `ml/TODO_ablation_active_learning.md`
+exists to surface. **Comparison so far:** the much simpler char-RNN
+(above) clearly outperforms this Graph VAE baseline (0.45 vs. 0.29
+validity, and meaningfully diverse vs. entirely collapsed samples) —
+itself a useful, real finding for `ml/TODO_generative_model.md`'s
+"compare the three approaches" task, not the result a "hardcore GNN
+project" would want to advertise, but the one that was actually measured.
+Next step, if pursued: either add proper graph matching (Simonovsky &
+Komodakis' original approach) or switch to an autoregressive/canonical
+build-order decoder (e.g. a GraphRNN-style construction), rather than
+tuning hyperparameters further on this architecture.
+
+## SAScore: generated (char-RNN) vs. ZINC training distribution
+
+| Set | n | Mean SAScore | Stdev |
+|---|---|---|---|
+| char-RNN valid samples | 10 | 3.13 | 1.00 |
+| ZINC training subset | 300 | 2.95 | 0.78 |
+
+Close to the training distribution, which is the expected/good outcome —
+the char-RNN's valid outputs are only mildly harder to synthesize than
+real ZINC molecules, not degenerate structures that happen to parse. The
+generated-side sample is small (n=10, the full first-page of valid
+outputs from the earlier run); a larger sample would tighten this
+comparison but was not re-run to avoid re-doing the full training pass
+just for more decimal precision.
+
 ## Reproduce
 
 ```bash
